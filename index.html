@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora Profissional</title>
+    <style>
+        /* ==========================================================
+           1. CSS RESET & VARIÁVEIS (Design System Base)
+           ========================================================== */
+        :root {
+            --bg-color: #0f172a;        /* Fundo da página */
+            --calc-bg: #1e293b;         /* Fundo da calculadora */
+            --display-bg: #0b1120;      /* Fundo do visor */
+            --text-primary: #f8fafc;    /* Texto principal */
+            --text-secondary: #94a3b8;  /* Texto secundário (histórico) */
+            --btn-bg: #334155;          /* Botão padrão */
+            --btn-hover: #475569;       /* Botão hover */
+            --btn-active: #1e293b;      /* Botão ativo */
+            --btn-accent: #3b82f6;      /* Botão de operação (Azul) */
+            --btn-accent-hover: #2563eb;
+            --btn-danger: #ef4444;      /* Botão clear (Vermelho) */
+            --btn-danger-hover: #dc2626;
+            --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+
+        /* ==========================================================
+           2. LAYOUT ESTRUTURAL (CSS Grid & Flexbox)
+           ========================================================== */
+        .calculator {
+            background-color: var(--calc-bg);
+            width: 340px;
+            border-radius: 24px;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            padding: 20px;
+        }
+
+        .display-container {
+            background-color: var(--display-bg);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            text-align: right;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .previous-operand {
+            min-height: 24px;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            word-wrap: break-word;
+            word-break: break-all;
+        }
+
+        .current-operand {
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            word-wrap: break-word;
+            word-break: break-all;
+            margin-top: 8px;
+        }
+
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        /* ==========================================================
+           3. ESTILIZAÇÃO DOS BOTÕES (Interatividade)
+           ========================================================== */
+        button {
+            cursor: pointer;
+            border: none;
+            outline: none;
+            background-color: var(--btn-bg);
+            color: var(--text-primary);
+            font-size: 1.5rem;
+            font-weight: 500;
+            border-radius: 12px;
+            padding: 18px 0;
+            transition: all 0.15s ease-in-out;
+            user-select: none;
+        }
+
+        button:hover { background-color: var(--btn-hover); }
+        button:active { background-color: var(--btn-active); transform: scale(0.95); }
+
+        /* Modificadores de Botões */
+        .btn-span-2 { grid-column: span 2; }
+        
+        .btn-operator { 
+            background-color: var(--btn-accent); 
+            font-weight: 600; 
+        }
+        .btn-operator:hover { background-color: var(--btn-accent-hover); }
+
+        .btn-clear { 
+            background-color: var(--btn-danger); 
+            font-weight: 600; 
+        }
+        .btn-clear:hover { background-color: var(--btn-danger-hover); }
+    </style>
+</head>
+<body>
+
+    <main class="calculator">
+        <div class="display-container">
+            <div class="previous-operand" data-previous-operand></div>
+            <div class="current-operand" data-current-operand>0</div>
+        </div>
+
+        <div class="keypad">
+            <button class="btn-clear btn-span-2" data-action="clear">AC</button>
+            <button class="btn-operator" data-action="delete">⌫</button>
+            <button class="btn-operator" data-operation="÷">÷</button>
+
+            <button data-number>7</button>
+            <button data-number>8</button>
+            <button data-number>9</button>
+            <button class="btn-operator" data-operation="×">×</button>
+
+            <button data-number>4</button>
+            <button data-number>5</button>
+            <button data-number>6</button>
+            <button class="btn-operator" data-operation="-">-</button>
+
+            <button data-number>1</button>
+            <button data-number>2</button>
+            <button data-number>3</button>
+            <button class="btn-operator" data-operation="+">+</button>
+
+            <button class="btn-span-2" data-number>0</button>
+            <button data-number>.</button>
+            <button class="btn-operator" data-action="calculate">=</button>
+        </div>
+    </main>
+
+    <script>
+        /* ==========================================================
+           LOGICA DE NEGÓCIO (Orientação a Objetos)
+           ========================================================== */
+        class Calculator {
+            constructor(previousOperandTextElement, currentOperandTextElement) {
+                this.previousOperandTextElement = previousOperandTextElement;
+                this.currentOperandTextElement = currentOperandTextElement;
+                this.clear(); // Estado inicial
+            }
+
+            // Reseta todos os estados da calculadora
+            clear() {
+                this.currentOperand = '0';
+                this.previousOperand = '';
+                this.operation = undefined;
+            }
+
+            // Remove o último dígito inserido
+            delete() {
+                if (this.currentOperand === '0') return;
+                this.currentOperand = this.currentOperand.toString().slice(0, -1);
+                if (this.currentOperand === '') this.currentOperand = '0';
+            }
+
+            // Concatena números e garante regra de ponto único decimal
+            appendNumber(number) {
+                if (number === '.' && this.currentOperand.includes('.')) return;
+                
+                // Sobrescreve o 0 inicial, exceto se for '.'
+                if (this.currentOperand === '0' && number !== '.') {
+                    this.currentOperand = number.toString();
+                } else {
+                    this.currentOperand = this.currentOperand.toString() + number.toString();
+                }
+            }
+
+            // Define qual operação matemática será executada
+            chooseOperation(operation) {
+                if (this.currentOperand === '' && this.previousOperand === '') return;
+                
+                // Permite trocar o operador se já houver um selecionado
+                if (this.currentOperand === '' && this.previousOperand !== '') {
+                    this.operation = operation;
+                    return;
+                }
+
+                if (this.previousOperand !== '') {
+                    this.compute();
+                }
+                
+                this.operation = operation;
+                this.previousOperand = this.currentOperand;
+                this.currentOperand = '';
+            }
+
+            // Executa o cálculo matemático
+            compute() {
+                let computation;
+                const prev = parseFloat(this.previousOperand);
+                const current = parseFloat(this.currentOperand);
+                
+                if (isNaN(prev) || isNaN(current)) return;
+
+                switch (this.operation) {
+                    case '+': computation = prev + current; break;
+                    case '-': computation = prev - current; break;
+                    case '×': computation = prev * current; break;
+                    case '÷':
+                        if (current === 0) {
+                            alert("Erro matemático: Divisão por zero não permitida.");
+                            this.clear();
+                            this.updateDisplay();
+                            return;
+                        }
+                        computation = prev / current; 
+                        break;
+                    default: return;
+                }
+                
+                // Tratamento para imprecisões de ponto flutuante do JS (ex: 0.1 + 0.2)
+                this.currentOperand = parseFloat(computation.toFixed(10)).toString();
+                this.operation = undefined;
+                this.previousOperand = '';
+            }
+
+            // Formata a exibição de números grandes/decimais (Milhares com vírgula)
+            getDisplayNumber(number) {
+                const stringNumber = number.toString();
+                const integerDigits = parseFloat(stringNumber.split('.')[0]);
+                const decimalDigits = stringNumber.split('.')[1];
+                let integerDisplay;
+                
+                if (isNaN(integerDigits)) {
+                    integerDisplay = '';
+                } else {
+                    integerDisplay = integerDigits.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+                }
+                
+                if (decimalDigits != null) {
+                    return `${integerDisplay},${decimalDigits}`;
+                } else {
+                    return integerDisplay;
+                }
+            }
+
+            // Atualiza os elementos HTML com os valores do estado
+            updateDisplay() {
+                // Remove formatação complexa se for apenas '0' para evitar bugs visuais
+                if (this.currentOperand === '0' || this.currentOperand === '') {
+                    this.currentOperandTextElement.innerText = this.currentOperand === '' ? '' : '0';
+                } else {
+                    this.currentOperandTextElement.innerText = this.getDisplayNumber(this.currentOperand);
+                }
+
+                if (this.operation != null) {
+                    this.previousOperandTextElement.innerText = 
+                        `${this.getDisplayNumber(this.previousOperand)} ${this.operation}`;
+                } else {
+                    this.previousOperandTextElement.innerText = '';
+                }
+            }
+        }
+
+        /* ==========================================================
+           INICIALIZAÇÃO E BINDING DE EVENTOS
+           ========================================================== */
+        const numberButtons = document.querySelectorAll('[data-number]');
+        const operationButtons = document.querySelectorAll('[data-operation]');
+        const equalsButton = document.querySelector('[data-action="calculate"]');
+        const deleteButton = document.querySelector('[data-action="delete"]');
+        const clearButton = document.querySelector('[data-action="clear"]');
+        const previousOperandTextElement = document.querySelector('[data-previous-operand]');
+        const currentOperandTextElement = document.querySelector('[data-current-operand]');
+
+        const calculator = new Calculator(previousOperandTextElement, currentOperandTextElement);
+
+        // Mapeamento de cliques numéricos
+        numberButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                calculator.appendNumber(button.innerText);
+                calculator.updateDisplay();
+            });
+        });
+
+        // Mapeamento de cliques operacionais
+        operationButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                calculator.chooseOperation(button.innerText);
+                calculator.updateDisplay();
+            });
+        });
+
+        // Ações de controle
+        equalsButton.addEventListener('click', () => {
+            calculator.compute();
+            calculator.updateDisplay();
+        });
+
+        clearButton.addEventListener('click', () => {
+            calculator.clear();
+            calculator.updateDisplay();
+        });
+
+        deleteButton.addEventListener('click', () => {
+            calculator.delete();
+            calculator.updateDisplay();
+        });
+
+        // Mapeamento de Teclado (UX Adicional)
+        document.addEventListener('keydown', function(event) {
+            let patternForNumbers = /[0-9]/g;
+            let patternForOperators = /[+\-*\/]/g;
+            
+            if (event.key.match(patternForNumbers)) {
+                event.preventDefault();
+                calculator.appendNumber(event.key);
+                calculator.updateDisplay();
+            }
+            if (event.key === '.') {
+                event.preventDefault();
+                calculator.appendNumber(event.key);
+                calculator.updateDisplay();
+            }
+            if (event.key.match(patternForOperators)) {
+                event.preventDefault();
+                const opMap = {'/': '÷', '*': '×', '-': '-', '+': '+'};
+                calculator.chooseOperation(opMap[event.key]);
+                calculator.updateDisplay();
+            }
+            if (event.key === 'Enter' || event.key === '=') {
+                event.preventDefault();
+                calculator.compute();
+                calculator.updateDisplay();
+            }
+            if (event.key === 'Backspace') {
+                event.preventDefault();
+                calculator.delete();
+                calculator.updateDisplay();
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                calculator.clear();
+                calculator.updateDisplay();
+            }
+        });
+    </script>
+</body>
+</html>
